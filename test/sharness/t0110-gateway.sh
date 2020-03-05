@@ -36,6 +36,13 @@ test_expect_success "GET IPFS path with explicit filename succeeds with proper h
   grep -F \"Content-Disposition: inline; filename*=UTF-8''test%D1%82%D0%B5%D1%81%D1%82\" actual_headers
 "
 
+# https://github.com/ipfs/go-ipfs/issues/4025#issuecomment-342250616
+test_expect_success "GET for Service Worker registration outside of an IPFS content root errors" "
+  curl -H 'Service-Worker: script'  -svX GET 'http://127.0.0.1:$port/ipfs/$HASH?filename=sw.js' > curl_sw_out 2>&1 &&
+  grep 'HTTP/1.1 400 Bad Request' curl_sw_out &&
+  grep 'navigator.serviceWorker: registration is not allowed for this scope' curl_sw_out
+"
+
 test_expect_success "GET IPFS path output looks good" '
   test_cmp expected actual &&
   rm actual
@@ -187,7 +194,7 @@ done
 
 # This one is different. `local` will be interpreted as a path if the command isn't defined.
 test_expect_success "test gateway api is sanitized: refs/local" '
-    echo "Error: invalid '"'ipfs ref'"' path" > refs_local_expected &&
+    echo "Error: invalid path \"local\": selected encoding not supported" > refs_local_expected &&
     ! ipfs --api /ip4/127.0.0.1/tcp/$port refs local > refs_local_actual 2>&1 &&
     test_cmp refs_local_expected refs_local_actual
   '

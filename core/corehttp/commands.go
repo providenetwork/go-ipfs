@@ -47,7 +47,7 @@ var defaultLocalhostOrigins = []string{
 func addCORSFromEnv(c *cmdsHttp.ServerConfig) {
 	origin := os.Getenv(originEnvKey)
 	if origin != "" {
-		log.Warning(originEnvKeyDeprecate)
+		log.Warn(originEnvKeyDeprecate)
 		c.AppendAllowedOrigins(origin)
 	}
 }
@@ -61,10 +61,8 @@ func addHeadersFromConfig(c *cmdsHttp.ServerConfig, nc *config.Config) {
 	if acam := nc.API.HTTPHeaders[cmdsHttp.ACAMethods]; acam != nil {
 		c.SetAllowedMethods(acam...)
 	}
-	if acac := nc.API.HTTPHeaders[cmdsHttp.ACACredentials]; acac != nil {
-		for _, v := range acac {
-			c.SetAllowCredentials(strings.ToLower(v) == "true")
-		}
+	for _, v := range nc.API.HTTPHeaders[cmdsHttp.ACACredentials] {
+		c.SetAllowCredentials(strings.ToLower(v) == "true")
 	}
 
 	c.Headers = make(map[string][]string, len(nc.API.HTTPHeaders)+1)
@@ -91,7 +89,7 @@ func addCORSDefaults(c *cmdsHttp.ServerConfig) {
 
 	// by default, use GET, PUT, POST
 	if len(c.AllowedMethods()) == 0 {
-		c.SetAllowedMethods("GET", "POST", "PUT")
+		c.SetAllowedMethods(http.MethodGet, http.MethodPost, http.MethodPut)
 	}
 }
 
@@ -123,7 +121,7 @@ func commandsOption(cctx oldcmds.Context, command *cmds.Command) ServeOption {
 	return func(n *core.IpfsNode, l net.Listener, mux *http.ServeMux) (*http.ServeMux, error) {
 
 		cfg := cmdsHttp.NewServerConfig()
-		cfg.SetAllowedMethods("GET", "POST", "PUT")
+		cfg.SetAllowedMethods(http.MethodGet, http.MethodPost, http.MethodPut)
 		cfg.APIPath = APIPath
 		rcfg, err := n.Repo.Config()
 		if err != nil {

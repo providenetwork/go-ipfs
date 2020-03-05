@@ -10,9 +10,9 @@ import (
 	path "github.com/ipfs/go-path"
 	opts "github.com/ipfs/interface-go-ipfs-core/options/namesys"
 	isd "github.com/jbenet/go-is-domain"
-	ci "github.com/libp2p/go-libp2p-crypto"
-	peer "github.com/libp2p/go-libp2p-peer"
-	routing "github.com/libp2p/go-libp2p-routing"
+	ci "github.com/libp2p/go-libp2p-core/crypto"
+	peer "github.com/libp2p/go-libp2p-core/peer"
+	routing "github.com/libp2p/go-libp2p-core/routing"
 	mh "github.com/multiformats/go-multihash"
 )
 
@@ -183,9 +183,12 @@ func (ns *mpns) PublishWithEOL(ctx context.Context, name ci.PrivKey, value path.
 		return err
 	}
 	ttl := DefaultResolverCacheTTL
-	if ttEol := eol.Sub(time.Now()); ttEol < ttl {
+	if setTTL, ok := checkCtxTTL(ctx); ok {
+		ttl = setTTL
+	}
+	if ttEol := time.Until(eol); ttEol < ttl {
 		ttl = ttEol
 	}
-	ns.cacheSet(peer.IDB58Encode(id), value, ttl)
+	ns.cacheSet(peer.Encode(id), value, ttl)
 	return nil
 }

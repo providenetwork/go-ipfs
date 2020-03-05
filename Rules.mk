@@ -4,6 +4,8 @@ COVERAGE :=
 DISTCLEAN :=
 TEST :=
 TEST_SHORT :=
+GOCC ?= go
+PROTOC ?= protoc
 
 all: help    # all has to be first defined target
 .PHONY: all
@@ -46,19 +48,12 @@ ifneq ($(filter coverage% clean distclean test/unit/gotest.junit.xml,$(MAKECMDGO
 	include $(dir)/Rules.mk
 endif
 
-dir := pin/internal/pb
-include $(dir)/Rules.mk
-
-dir := filestore/pb
-include $(dir)/Rules.mk
-
-
 # -------------------- #
 #   universal rules    #
 # -------------------- #
 
-%.pb.go: %.proto
-	$(PROTOC)
+%.pb.go: %.proto bin/protoc-gen-gogofaster
+	$(PROTOC) --gogofaster_out=. --proto_path=.:$(GOPATH)/src:$(dir $@) $<
 
 # -------------------- #
 #     core targets     #
@@ -104,8 +99,13 @@ install_unsupported: install
 .PHONY: install_unsupported
 
 uninstall:
-	go clean -i ./cmd/ipfs
+	$(GOCC) clean -i ./cmd/ipfs
 .PHONY: uninstall
+
+supported:
+	@echo "Currently supported platforms:"
+	@for p in ${SUPPORTED_PLATFORMS}; do echo $$p; done
+.PHONY: supported
 
 help:
 	@echo 'DEPENDENCY TARGETS:'
@@ -135,7 +135,7 @@ help:
 	@echo '  test_go_test            - Run all go tests'
 	@echo '  test_go_expensive       - Run all go tests and compile on all platforms'
 	@echo '  test_go_race            - Run go tests with the race detector enabled'
-	@echo '  test_go_megacheck       - Run the `megacheck` vetting tool'
+	@echo '  test_go_lint            - Run the `golangci-lint` vetting tool'
 	@echo '  test_sharness_short     - Run short sharness tests'
 	@echo '  test_sharness_expensive - Run all sharness tests'
 	@echo '  coverage     - Collects coverage info from unit tests and sharness'

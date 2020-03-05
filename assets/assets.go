@@ -1,11 +1,10 @@
-//go:generate go-bindata -pkg=assets -prefix=$GOPATH/src/gx/ipfs/QmT1jwrqzSMjSjLG5oBd9w4P9vXPKQksWuf5ghsE3Q88ZV init-doc $GOPATH/src/gx/ipfs/QmT1jwrqzSMjSjLG5oBd9w4P9vXPKQksWuf5ghsE3Q88ZV/dir-index-html
+//go:generate git submodule update --init ./dir-index-html
+//go:generate go run github.com/go-bindata/go-bindata/go-bindata -pkg=assets init-doc dir-index-html/dir-index.html dir-index-html/knownIcons.txt
 //go:generate gofmt -w bindata.go
-
 package assets
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/ipfs/go-ipfs/core"
@@ -13,11 +12,8 @@ import (
 
 	cid "github.com/ipfs/go-cid"
 	files "github.com/ipfs/go-ipfs-files"
-	iface "github.com/ipfs/interface-go-ipfs-core"
 	options "github.com/ipfs/interface-go-ipfs-core/options"
-
-	// this import keeps gx from thinking the dep isn't used
-	_ "github.com/ipfs/dir-index-html"
+	"github.com/ipfs/interface-go-ipfs-core/path"
 )
 
 // initDocPaths lists the paths for the docs we want to seed during --init
@@ -36,16 +32,6 @@ func SeedInitDocs(nd *core.IpfsNode) (cid.Cid, error) {
 	return addAssetList(nd, initDocPaths)
 }
 
-var initDirPath = filepath.Join(os.Getenv("GOPATH"), "gx", "ipfs", "QmT1jwrqzSMjSjLG5oBd9w4P9vXPKQksWuf5ghsE3Q88ZV", "dir-index-html")
-var initDirIndex = []string{
-	filepath.Join(initDirPath, "knownIcons.txt"),
-	filepath.Join(initDirPath, "dir-index.html"),
-}
-
-func SeedInitDirIndex(nd *core.IpfsNode) (cid.Cid, error) {
-	return addAssetList(nd, initDirIndex)
-}
-
 func addAssetList(nd *core.IpfsNode, l []string) (cid.Cid, error) {
 	api, err := coreapi.NewCoreAPI(nd)
 	if err != nil {
@@ -57,7 +43,7 @@ func addAssetList(nd *core.IpfsNode, l []string) (cid.Cid, error) {
 		return cid.Cid{}, err
 	}
 
-	basePath := iface.IpfsPath(dirb.Cid())
+	basePath := path.IpfsPath(dirb.Cid())
 
 	for _, p := range l {
 		d, err := Asset(p)

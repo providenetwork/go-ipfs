@@ -12,28 +12,28 @@ import (
 	dag "github.com/ipfs/go-merkledag"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	caopts "github.com/ipfs/interface-go-ipfs-core/options"
-	peer "github.com/libp2p/go-libp2p-peer"
-	pstore "github.com/libp2p/go-libp2p-peerstore"
-	routing "github.com/libp2p/go-libp2p-routing"
+	path "github.com/ipfs/interface-go-ipfs-core/path"
+	peer "github.com/libp2p/go-libp2p-core/peer"
+	routing "github.com/libp2p/go-libp2p-core/routing"
 )
 
 type DhtAPI CoreAPI
 
-func (api *DhtAPI) FindPeer(ctx context.Context, p peer.ID) (pstore.PeerInfo, error) {
+func (api *DhtAPI) FindPeer(ctx context.Context, p peer.ID) (peer.AddrInfo, error) {
 	err := api.checkOnline(false)
 	if err != nil {
-		return pstore.PeerInfo{}, err
+		return peer.AddrInfo{}, err
 	}
 
 	pi, err := api.routing.FindPeer(ctx, peer.ID(p))
 	if err != nil {
-		return pstore.PeerInfo{}, err
+		return peer.AddrInfo{}, err
 	}
 
 	return pi, nil
 }
 
-func (api *DhtAPI) FindProviders(ctx context.Context, p coreiface.Path, opts ...caopts.DhtFindProvidersOption) (<-chan pstore.PeerInfo, error) {
+func (api *DhtAPI) FindProviders(ctx context.Context, p path.Path, opts ...caopts.DhtFindProvidersOption) (<-chan peer.AddrInfo, error) {
 	settings, err := caopts.DhtFindProvidersOptions(opts...)
 	if err != nil {
 		return nil, err
@@ -58,7 +58,7 @@ func (api *DhtAPI) FindProviders(ctx context.Context, p coreiface.Path, opts ...
 	return pchan, nil
 }
 
-func (api *DhtAPI) Provide(ctx context.Context, path coreiface.Path, opts ...caopts.DhtProvideOption) error {
+func (api *DhtAPI) Provide(ctx context.Context, path path.Path, opts ...caopts.DhtProvideOption) error {
 	settings, err := caopts.DhtProvideOptions(opts...)
 	if err != nil {
 		return err
@@ -97,7 +97,7 @@ func (api *DhtAPI) Provide(ctx context.Context, path coreiface.Path, opts ...cao
 	return nil
 }
 
-func provideKeys(ctx context.Context, r routing.IpfsRouting, cids []cid.Cid) error {
+func provideKeys(ctx context.Context, r routing.Routing, cids []cid.Cid) error {
 	for _, c := range cids {
 		err := r.Provide(ctx, c, true)
 		if err != nil {
@@ -107,14 +107,14 @@ func provideKeys(ctx context.Context, r routing.IpfsRouting, cids []cid.Cid) err
 	return nil
 }
 
-func provideKeysRec(ctx context.Context, r routing.IpfsRouting, bs blockstore.Blockstore, cids []cid.Cid) error {
+func provideKeysRec(ctx context.Context, r routing.Routing, bs blockstore.Blockstore, cids []cid.Cid) error {
 	provided := cidutil.NewStreamingSet()
 
 	errCh := make(chan error)
 	go func() {
 		dserv := dag.NewDAGService(blockservice.New(bs, offline.Exchange(bs)))
 		for _, c := range cids {
-			err := dag.EnumerateChildrenAsync(ctx, dag.GetLinksDirect(dserv), c, provided.Visitor(ctx))
+			err := dag.Walk(ctx, dag.GetLinksDirect(dserv), c, provided.Visitor(ctx))
 			if err != nil {
 				errCh <- err
 			}

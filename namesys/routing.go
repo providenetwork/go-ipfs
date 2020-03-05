@@ -12,9 +12,9 @@ import (
 	logging "github.com/ipfs/go-log"
 	path "github.com/ipfs/go-path"
 	opts "github.com/ipfs/interface-go-ipfs-core/options/namesys"
+	peer "github.com/libp2p/go-libp2p-core/peer"
+	routing "github.com/libp2p/go-libp2p-core/routing"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
-	peer "github.com/libp2p/go-libp2p-peer"
-	routing "github.com/libp2p/go-libp2p-routing"
 	mh "github.com/multiformats/go-multihash"
 )
 
@@ -59,7 +59,7 @@ func (r *IpnsResolver) resolveOnceAsync(ctx context.Context, name string, option
 	}
 
 	name = strings.TrimPrefix(name, "/ipns/")
-	pid, err := peer.IDB58Decode(name)
+	pid, err := peer.Decode(name)
 	if err != nil {
 		log.Debugf("RoutingResolver: could not convert public key hash %s to peer ID: %s\n", name, err)
 		out <- onceResult{err: err}
@@ -137,7 +137,7 @@ func (r *IpnsResolver) resolveOnceAsync(ctx context.Context, name string, option
 				case ipns.ErrUnrecognizedValidity:
 					// No EOL.
 				case nil:
-					ttEol := eol.Sub(time.Now())
+					ttEol := time.Until(eol)
 					if ttEol < 0 {
 						// It *was* valid when we first resolved it.
 						ttl = 0

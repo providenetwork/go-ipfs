@@ -211,6 +211,7 @@ func TestCommands(t *testing.T) {
 		"/urlstore",
 		"/urlstore/add",
 		"/version",
+		"/version/deps",
 		"/cid",
 		"/cid/format",
 		"/cid/base32",

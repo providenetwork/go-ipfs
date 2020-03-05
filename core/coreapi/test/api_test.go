@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ipfs/go-ipfs/filestore"
-
+	"github.com/ipfs/go-filestore"
 	"github.com/ipfs/go-ipfs/core"
+	"github.com/ipfs/go-ipfs/core/bootstrap"
 	"github.com/ipfs/go-ipfs/core/coreapi"
 	mock "github.com/ipfs/go-ipfs/core/mock"
 	"github.com/ipfs/go-ipfs/keystore"
@@ -21,9 +21,8 @@ import (
 	"github.com/ipfs/go-ipfs-config"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	"github.com/ipfs/interface-go-ipfs-core/tests"
-	ci "github.com/libp2p/go-libp2p-crypto"
-	"github.com/libp2p/go-libp2p-peer"
-	pstore "github.com/libp2p/go-libp2p-peerstore"
+	ci "github.com/libp2p/go-libp2p-core/crypto"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p/p2p/net/mock"
 )
 
@@ -40,7 +39,7 @@ func (NodeProvider) MakeAPISwarm(ctx context.Context, fullIdentity bool, n int) 
 	for i := 0; i < n; i++ {
 		var ident config.Identity
 		if fullIdentity {
-			sk, pk, err := ci.GenerateKeyPair(ci.RSA, 512)
+			sk, pk, err := ci.GenerateKeyPair(ci.RSA, 2048)
 			if err != nil {
 				return nil, err
 			}
@@ -70,10 +69,10 @@ func (NodeProvider) MakeAPISwarm(ctx context.Context, fullIdentity bool, n int) 
 		c.Identity = ident
 		c.Experimental.FilestoreEnabled = true
 
-		ds := datastore.NewMapDatastore()
+		ds := syncds.MutexWrap(datastore.NewMapDatastore())
 		r := &repo.Mock{
 			C: c,
-			D: syncds.MutexWrap(ds),
+			D: ds,
 			K: keystore.NewMemKeystore(),
 			F: filestore.NewFileManager(ds, filepath.Dir(os.TempDir())),
 		}
@@ -101,8 +100,8 @@ func (NodeProvider) MakeAPISwarm(ctx context.Context, fullIdentity bool, n int) 
 		return nil, err
 	}
 
-	bsinf := core.BootstrapConfigWithPeers(
-		[]pstore.PeerInfo{
+	bsinf := bootstrap.BootstrapConfigWithPeers(
+		[]peer.AddrInfo{
 			nodes[0].Peerstore.PeerInfo(nodes[0].Identity),
 		},
 	)

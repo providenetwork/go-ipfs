@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	logging "github.com/ipfs/go-log"
-	ci "github.com/libp2p/go-libp2p-crypto"
+	ci "github.com/libp2p/go-libp2p-core/crypto"
 	base32 "github.com/whyrusleeping/base32"
 )
 
@@ -185,7 +185,7 @@ func (ks *FSKeystore) List() ([]string, error) {
 		if err == nil {
 			list = append(list, name)
 		} else {
-			log.Warningf("Ignoring the invalid keyfile: %s", name)
+			log.Warnf("Ignoring the invalid keyfile: %s", name)
 		}
 	}
 

@@ -22,9 +22,9 @@ import (
 	files "github.com/ipfs/go-ipfs-files"
 	path "github.com/ipfs/go-path"
 	iface "github.com/ipfs/interface-go-ipfs-core"
-	"github.com/ipfs/interface-go-ipfs-core/options"
 	nsopts "github.com/ipfs/interface-go-ipfs-core/options/namesys"
-	ci "github.com/libp2p/go-libp2p-crypto"
+	ipath "github.com/ipfs/interface-go-ipfs-core/path"
+	ci "github.com/libp2p/go-libp2p-core/crypto"
 	id "github.com/libp2p/go-libp2p/p2p/protocol/identify"
 )
 
@@ -44,7 +44,7 @@ func (m mockNamesys) Resolve(ctx context.Context, name string, opts ...nsopts.Re
 		depth = ^uint(0)
 	}
 	for strings.HasPrefix(name, "/ipns/") {
-		if depth <= 0 {
+		if depth == 0 {
 			return value, namesys.ErrResolveRecursion
 		}
 		depth--
@@ -202,7 +202,7 @@ func TestGatewayGet(t *testing.T) {
 		{"example.man", "/", http.StatusOK, "fnord"},
 	} {
 		var c http.Client
-		r, err := http.NewRequest("GET", ts.URL+test.path, nil)
+		r, err := http.NewRequest(http.MethodGet, ts.URL+test.path, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -236,9 +236,6 @@ func TestGatewayGet(t *testing.T) {
 }
 
 func TestIPNSHostnameRedirect(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	ns := mockNamesys{}
 	ts, api, ctx := newTestServerAndNode(t, ns)
 	t.Logf("test server url: %s", ts.URL)
@@ -253,7 +250,7 @@ func TestIPNSHostnameRedirect(t *testing.T) {
 		}),
 	})
 
-	k, err := api.Unixfs().Add(ctx, f1, options.Unixfs.Wrap(true))
+	k, err := api.Unixfs().Add(ctx, f1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +259,7 @@ func TestIPNSHostnameRedirect(t *testing.T) {
 	ns["/ipns/example.net"] = path.FromString(k.String())
 
 	// make request to directory containing index.html
-	req, err := http.NewRequest("GET", ts.URL+"/foo", nil)
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/foo", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +282,7 @@ func TestIPNSHostnameRedirect(t *testing.T) {
 	}
 
 	// make request with prefix to directory containing index.html
-	req, err = http.NewRequest("GET", ts.URL+"/foo", nil)
+	req, err = http.NewRequest(http.MethodGet, ts.URL+"/foo", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,7 +306,7 @@ func TestIPNSHostnameRedirect(t *testing.T) {
 	}
 
 	// make sure /version isn't exposed
-	req, err = http.NewRequest("GET", ts.URL+"/version", nil)
+	req, err = http.NewRequest(http.MethodGet, ts.URL+"/version", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,9 +324,6 @@ func TestIPNSHostnameRedirect(t *testing.T) {
 }
 
 func TestIPNSHostnameBacklinks(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	ns := mockNamesys{}
 	ts, api, ctx := newTestServerAndNode(t, ns)
 	t.Logf("test server url: %s", ts.URL)
@@ -346,17 +340,17 @@ func TestIPNSHostnameBacklinks(t *testing.T) {
 	})
 
 	// create /ipns/example.net/foo/
-	k, err := api.Unixfs().Add(ctx, f1, options.Unixfs.Wrap(true))
+	k, err := api.Unixfs().Add(ctx, f1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	k2, err := api.ResolvePath(ctx, iface.Join(k, "foo? #<'"))
+	k2, err := api.ResolvePath(ctx, ipath.Join(k, "foo? #<'"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	k3, err := api.ResolvePath(ctx, iface.Join(k, "foo? #<'/bar"))
+	k3, err := api.ResolvePath(ctx, ipath.Join(k, "foo? #<'/bar"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,7 +359,7 @@ func TestIPNSHostnameBacklinks(t *testing.T) {
 	ns["/ipns/example.net"] = path.FromString(k.String())
 
 	// make request to directory listing
-	req, err := http.NewRequest("GET", ts.URL+"/foo%3F%20%23%3C%27/", nil)
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/foo%3F%20%23%3C%27/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +392,7 @@ func TestIPNSHostnameBacklinks(t *testing.T) {
 	}
 
 	// make request to directory listing at root
-	req, err = http.NewRequest("GET", ts.URL, nil)
+	req, err = http.NewRequest(http.MethodGet, ts.URL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -431,7 +425,7 @@ func TestIPNSHostnameBacklinks(t *testing.T) {
 	}
 
 	// make request to directory listing
-	req, err = http.NewRequest("GET", ts.URL+"/foo%3F%20%23%3C%27/bar/", nil)
+	req, err = http.NewRequest(http.MethodGet, ts.URL+"/foo%3F%20%23%3C%27/bar/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -464,7 +458,7 @@ func TestIPNSHostnameBacklinks(t *testing.T) {
 	}
 
 	// make request to directory listing with prefix
-	req, err = http.NewRequest("GET", ts.URL, nil)
+	req, err = http.NewRequest(http.MethodGet, ts.URL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -498,7 +492,7 @@ func TestIPNSHostnameBacklinks(t *testing.T) {
 	}
 
 	// make request to directory listing with illegal prefix
-	req, err = http.NewRequest("GET", ts.URL, nil)
+	req, err = http.NewRequest(http.MethodGet, ts.URL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -506,7 +500,7 @@ func TestIPNSHostnameBacklinks(t *testing.T) {
 	req.Header.Set("X-Ipfs-Gateway-Prefix", "/bad-prefix")
 
 	// make request to directory listing with evil prefix
-	req, err = http.NewRequest("GET", ts.URL, nil)
+	req, err = http.NewRequest(http.MethodGet, ts.URL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -545,7 +539,7 @@ func TestCacheControlImmutable(t *testing.T) {
 	t.Logf("test server url: %s", ts.URL)
 	defer ts.Close()
 
-	req, err := http.NewRequest("GET", ts.URL+emptyDir+"/", nil)
+	req, err := http.NewRequest(http.MethodGet, ts.URL+emptyDir+"/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -572,7 +566,7 @@ func TestGoGetSupport(t *testing.T) {
 	defer ts.Close()
 
 	// mimic go-get
-	req, err := http.NewRequest("GET", ts.URL+emptyDir+"?go-get=1", nil)
+	req, err := http.NewRequest(http.MethodGet, ts.URL+emptyDir+"?go-get=1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -595,7 +589,7 @@ func TestVersion(t *testing.T) {
 	t.Logf("test server url: %s", ts.URL)
 	defer ts.Close()
 
-	req, err := http.NewRequest("GET", ts.URL+"/version", nil)
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/version", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -614,7 +608,7 @@ func TestVersion(t *testing.T) {
 		t.Fatalf("response doesn't contain commit:\n%s", s)
 	}
 
-	if !strings.Contains(s, "Client Version: "+id.ClientVersion) {
+	if !strings.Contains(s, "Client Version: "+version.UserAgent) {
 		t.Fatalf("response doesn't contain client version:\n%s", s)
 	}
 

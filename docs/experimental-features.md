@@ -28,6 +28,9 @@ the above issue.
 - [IPNS PubSub](#ipns-pubsub)
 - [QUIC](#quic)
 - [AutoRelay](#autorelay)
+- [TLS 1.3 Handshake](#tls-13-as-default-handshake-protocol)
+- [Strategic Providing](#strategic-providing)
+- [Graphsync](graphsync)
 
 ---
 
@@ -104,50 +107,18 @@ bandwidth than the others, but is lacking on congestion control and backpressure
 logic. It is available to try out and experiment with.
 
 ### State
-Experimental
+Stable
 
 ### In Version
 0.4.5
 
 ### How to enable
-run your daemon with `--enable-mplex-experiment`
 
 To make it the default stream muxer, set the environment variable
 `LIBP2P_MUX_PREFS` as follows:
 ```
 export LIBP2P_MUX_PREFS="/mplex/6.7.0 /yamux/1.0.0 /spdy/3.1.0"
 ```
-
-To check which stream muxer is being used between any two given peers, check the
-json output of the `ipfs swarm peers` command, you'll see something like this:
-```
-$ ipfs swarm peers -v --enc=json | jq .
-{
-  "Peers": [
-    {
-      "Addr": "/ip4/104.131.131.82/tcp/4001",
-      "Peer": "QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ",
-      "Latency": "46.032624ms",
-      "Muxer": "*peerstream_multiplex.conn",
-      "Streams": [
-        {
-          "Protocol": "/ipfs/bitswap/1.1.0"
-        },
-        {
-          "Protocol": "/ipfs/kad/1.0.0"
-        },
-        {
-          "Protocol": "/ipfs/kad/1.0.0"
-        }
-      ]
-    },
-    {
-...
-```
-
-### Road to being a real feature
-- [ ] Significant real world testing and performance metrics across a wide
-      variety of workloads showing that it works well.
 
 ---
 
@@ -259,7 +230,7 @@ ipfs bootstrap add <multiaddr>
 
 For example:
 ```
-ipfs bootstrap add /ip4/104.236.76.40/tcp/4001/ipfs/QmSoLV4Bbm51jM9C4gDYZQ9Cy3U6aXMJDAbzgu2fzaDs64
+ipfs bootstrap add /ip4/104.236.76.40/tcp/4001/p2p/QmSoLV4Bbm51jM9C4gDYZQ9Cy3U6aXMJDAbzgu2fzaDs64
 ```
 
 Bootstrap nodes are no different from all other nodes in the network apart from
@@ -332,7 +303,7 @@ connections on `127.0.0.1:SOME_PORT` to the server node listening
 on `/x/kickass/1.0`.
 
 ```sh
-> ipfs p2p forward /x/kickass/1.0 /ip4/127.0.0.1/tcp/$SOME_PORT /ipfs/$SERVER_ID
+> ipfs p2p forward /x/kickass/1.0 /ip4/127.0.0.1/tcp/$SOME_PORT /p2p/$SERVER_ID
 ```
 
 Next, have your application open a connection to `127.0.0.1:$SOME_PORT`. This
@@ -373,7 +344,7 @@ ipfs p2p listen /x/ssh /ip4/127.0.0.1/tcp/22
 ***Then, on "client" node:***
 
 ```sh
-ipfs p2p forward /x/ssh /ip4/127.0.0.1/tcp/2222 /ipfs/$SERVER_ID
+ipfs p2p forward /x/ssh /ip4/127.0.0.1/tcp/2222 /p2p/$SERVER_ID
 ```
 
 You should now be able to connect to your ssh server through a libp2p connection
@@ -495,13 +466,13 @@ already online node would have to be restarted.
 In order to connect peers QmA and QmB through a relay node QmRelay:
 
 - Both peers should connect to the relay:
-`ipfs swarm connect /transport/address/ipfs/QmRelay`
+`ipfs swarm connect /transport/address/p2p/QmRelay`
 - Peer QmA can then connect to peer QmB using the relay:
-`ipfs swarm connect /ipfs/QmRelay/p2p-circuit/ipfs/QmB`
+`ipfs swarm connect /p2p/QmRelay/p2p-circuit/p2p/QmB`
 
 Peers can also connect with an unspecific relay address, which will
 try to dial through known relays:
-`ipfs swarm connect /p2p-circuit/ipfs/QmB`
+`ipfs swarm connect /p2p-circuit/p2p/QmB`
 
 Peers can see their (unspecific) relay address in the output of
 `ipfs swarm addrs listen`
@@ -537,27 +508,29 @@ See [Plugin docs](./plugins.md)
 - [ ] More plugins and plugin types
 - [ ] Feedback on stability
 
- ## Badger datastore
+## Badger datastore
 
- ### In Version
- 0.4.11
+### In Version
 
- Badger-ds is new datastore implementation based on
- https://github.com/dgraph-io/badger
+0.4.11
 
- ### Basic Usage
+Badger-ds is new datastore implementation based on
+https://github.com/dgraph-io/badger.
+ 
 
- ```
- $ ipfs init --profile=badgerds
- ```
- or
- ```
- [BACKUP ~/.ipfs]
- $ ipfs config profile apply badgerds
- $ ipfs-ds-convert convert
- ```
+### Basic Usage
 
-###
+```
+$ ipfs init --profile=badgerds
+```
+or install https://github.com/ipfs/ipfs-ds-convert/ and
+```
+[BACKUP ~/.ipfs]
+$ ipfs config profile apply badgerds
+$ ipfs-ds-convert convert
+```
+
+You can read more in the [datastore](./datastores.md#badgerds) documentation.
 
 ### Road to being a real feature
 
@@ -683,3 +656,80 @@ ipfs config --json Swarm.EnableAutoNATService true
 ### Road to being a real feature
 
 - [ ] needs testing
+
+
+## TLS 1.3 as default handshake protocol
+
+### State
+
+Every go-ipfs node (>=0.4.21) accepts secio and TLS 1.3 connections but prefers
+secio over TLS when dialing. To prefer TLS when dialing, you'll have to enable
+this feature.
+
+### How to enable
+
+Modify your ipfs config:
+
+```
+ipfs config --json Experimental.PreferTLS true
+```
+
+### Road to being a real feature
+
+- [ ] needs testing
+- [ ] needs adoption
+
+---
+
+## Strategic Providing
+
+### State
+
+Experimental, disabled by default.
+
+Replaces the existing provide mechanism with a robust, strategic provider system.
+
+### How to enable
+
+Modify your ipfs config:
+
+```
+ipfs config --json Experimental.StrategicProviding true
+```
+
+### Road to being a real feature
+
+- [ ] needs real world testing
+- [ ] needs adoption
+- [ ] needs to support all providing features
+    - [X] provide nothing
+    - [ ] provide roots
+    - [ ] provide all
+    - [ ] provide strategic
+
+## GraphSync
+
+### State
+
+Experimental, disabled by default.
+
+[GraphSync](https://github.com/ipfs/go-graphsync) is the next-gen graph exchange
+protocol for IPFS.
+
+When this feature is enabled, IPFS will make files available over the graphsync
+protocol. However, IPFS will not currently use this protocol to _fetch_ files.
+
+### How to enable
+
+Modify your ipfs config:
+
+```
+ipfs config --json Experimental.GraphsyncEnabled true
+```
+
+### Road to being a real feature
+
+- [ ] We need to confirm that it can't be used to DoS a node. The server-side
+      logic for GraphSync is quite complex and, if we're not careful, the server
+      might end up performing unbounded work when responding to a malicious
+      request.

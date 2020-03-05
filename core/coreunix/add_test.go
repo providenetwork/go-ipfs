@@ -12,13 +12,13 @@ import (
 	"time"
 
 	"github.com/ipfs/go-ipfs/core"
-	"github.com/ipfs/go-ipfs/pin/gc"
+	"github.com/ipfs/go-ipfs/gc"
 	"github.com/ipfs/go-ipfs/repo"
 
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-blockservice"
-	cid "github.com/ipfs/go-cid"
-	datastore "github.com/ipfs/go-datastore"
+	"github.com/ipfs/go-cid"
+	"github.com/ipfs/go-datastore"
 	syncds "github.com/ipfs/go-datastore/sync"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	config "github.com/ipfs/go-ipfs-config"
@@ -29,6 +29,116 @@ import (
 )
 
 const testPeerID = "QmTFauExutTsy4XP6JbMFcw2Wa9645HJt2bTqL6qYDCKfe"
+
+func TestAddMultipleGCLive(t *testing.T) {
+	r := &repo.Mock{
+		C: config.Config{
+			Identity: config.Identity{
+				PeerID: testPeerID, // required by offline node
+			},
+		},
+		D: syncds.MutexWrap(datastore.NewMapDatastore()),
+	}
+	node, err := core.NewNode(context.Background(), &core.BuildCfg{Repo: r})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out := make(chan interface{}, 10)
+	adder, err := NewAdder(context.Background(), node.Pinning, node.Blockstore, node.DAG)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adder.Out = out
+
+	// make two files with pipes so we can 'pause' the add for timing of the test
+	piper1, pipew1 := io.Pipe()
+	hangfile1 := files.NewReaderFile(piper1)
+
+	piper2, pipew2 := io.Pipe()
+	hangfile2 := files.NewReaderFile(piper2)
+
+	rfc := files.NewBytesFile([]byte("testfileA"))
+
+	slf := files.NewMapDirectory(map[string]files.Node{
+		"a": hangfile1,
+		"b": hangfile2,
+		"c": rfc,
+	})
+
+	go func() {
+		defer close(out)
+		_, _ = adder.AddAllAndPin(slf)
+		// Ignore errors for clarity - the real bug would be gc'ing files while adding them, not this resultant error
+	}()
+
+	// Start writing the first file but don't close the stream
+	if _, err := pipew1.Write([]byte("some data for file a")); err != nil {
+		t.Fatal(err)
+	}
+
+	var gc1out <-chan gc.Result
+	gc1started := make(chan struct{})
+	go func() {
+		defer close(gc1started)
+		gc1out = gc.GC(context.Background(), node.Blockstore, node.Repo.Datastore(), node.Pinning, nil)
+	}()
+
+	// GC shouldn't get the lock until after the file is completely added
+	select {
+	case <-gc1started:
+		t.Fatal("gc shouldnt have started yet")
+	default:
+	}
+
+	// finish write and unblock gc
+	pipew1.Close()
+
+	// Should have gotten the lock at this point
+	<-gc1started
+
+	removedHashes := make(map[string]struct{})
+	for r := range gc1out {
+		if r.Error != nil {
+			t.Fatal(err)
+		}
+		removedHashes[r.KeyRemoved.String()] = struct{}{}
+	}
+
+	if _, err := pipew2.Write([]byte("some data for file b")); err != nil {
+		t.Fatal(err)
+	}
+
+	var gc2out <-chan gc.Result
+	gc2started := make(chan struct{})
+	go func() {
+		defer close(gc2started)
+		gc2out = gc.GC(context.Background(), node.Blockstore, node.Repo.Datastore(), node.Pinning, nil)
+	}()
+
+	select {
+	case <-gc2started:
+		t.Fatal("gc shouldnt have started yet")
+	default:
+	}
+
+	pipew2.Close()
+
+	<-gc2started
+
+	for r := range gc2out {
+		if r.Error != nil {
+			t.Fatal(err)
+		}
+		removedHashes[r.KeyRemoved.String()] = struct{}{}
+	}
+
+	for o := range out {
+		if _, ok := removedHashes[o.(*coreiface.AddEvent).Path.Cid().String()]; ok {
+			t.Fatal("gc'ed a hash we just added")
+		}
+	}
+}
 
 func TestAddGCLive(t *testing.T) {
 	r := &repo.Mock{
@@ -72,7 +182,7 @@ func TestAddGCLive(t *testing.T) {
 		_, err := adder.AddAllAndPin(slf)
 
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 
 	}()
@@ -93,7 +203,9 @@ func TestAddGCLive(t *testing.T) {
 	}()
 
 	// gc shouldnt start until we let the add finish its current file.
-	pipew.Write([]byte("some data for file b"))
+	if _, err := pipew.Write([]byte("some data for file b")); err != nil {
+		t.Fatal(err)
+	}
 
 	select {
 	case <-gcstarted:
@@ -135,7 +247,7 @@ func TestAddGCLive(t *testing.T) {
 	defer cancel()
 
 	set := cid.NewSet()
-	err = dag.EnumerateChildren(ctx, dag.GetLinksWithDAG(node.DAG), last, set.Visit)
+	err = dag.Walk(ctx, dag.GetLinksWithDAG(node.DAG), last, set.Visit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +290,7 @@ func testAddWPosInfo(t *testing.T, rawLeaves bool) {
 		defer close(adder.Out)
 		_, err = adder.AddAllAndPin(file)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 	}()
 	for range out {
@@ -227,7 +339,7 @@ func (bs *testBlockstore) PutMany(blocks []blocks.Block) error {
 	return bs.GCBlockstore.PutMany(blocks)
 }
 
-func (bs *testBlockstore) CheckForPosInfo(block blocks.Block) error {
+func (bs *testBlockstore) CheckForPosInfo(block blocks.Block) {
 	fsn, ok := block.(*pi.FilestoreNode)
 	if ok {
 		posInfo := fsn.PosInfo
@@ -240,7 +352,6 @@ func (bs *testBlockstore) CheckForPosInfo(block blocks.Block) error {
 			bs.countAtOffsetNonZero += 1
 		}
 	}
-	return nil
 }
 
 type dummyFileInfo struct {

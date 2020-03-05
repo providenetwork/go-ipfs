@@ -16,32 +16,11 @@ init_strategy() {
     PEERID_1=$(iptb attr get 1 id)
   '
 
-  test_expect_success 'use pinning startegy for reprovider' '
+  test_expect_success 'use pinning strategy for reprovider' '
     ipfsi 0 config Reprovider.Strategy '$1'
   '
 
   startup_cluster ${NUM_NODES}
-}
-
-findprovs_empty() {
-  test_expect_success 'findprovs '$1' succeeds' '
-    ipfsi 1 dht findprovs -n 1 '$1' > findprovsOut
-  '
-
-  test_expect_success "findprovs $1 output is empty" '
-    test_must_be_empty findprovsOut
-  '
-}
-
-findprovs_expect() {
-  test_expect_success 'findprovs '$1' succeeds' '
-    ipfsi 1 dht findprovs -n 1 '$1' > findprovsOut &&
-    echo '$2' > expected
-  '
-
-  test_expect_success "findprovs $1 output looks good" '
-    test_cmp findprovsOut expected
-  '
 }
 
 reprovide() {
@@ -75,9 +54,9 @@ test_expect_success 'prepare test files' '
 '
 
 test_expect_success 'add test objects' '
-  HASH_FOO=$(ipfsi 0 add -q --local --pin=false f1) &&
-  HASH_BAR=$(ipfsi 0 add -q --local --pin=false f2) &&
-  HASH_BAR_DIR=$(ipfsi 0 add -q --local -w f2)
+  HASH_FOO=$(ipfsi 0 add -q --offline --pin=false f1) &&
+  HASH_BAR=$(ipfsi 0 add -q --offline --pin=false f2) &&
+  HASH_BAR_DIR=$(ipfsi 0 add -q --offline -w f2)
 '
 
 findprovs_empty '$HASH_FOO'
@@ -104,10 +83,10 @@ test_expect_success 'prepare test files' '
 '
 
 test_expect_success 'add test objects' '
-  HASH_FOO=$(ipfsi 0 add -q --local --pin=false f1) &&
-  HASH_BAR=$(ipfsi 0 add -q --local --pin=false f2) &&
-  HASH_BAZ=$(ipfsi 0 add -q --local f3) &&
-  HASH_BAR_DIR=$(ipfsi 0 add -q --local -w f2 | tail -1)
+  HASH_FOO=$(ipfsi 0 add -q --offline --pin=false f1) &&
+  HASH_BAR=$(ipfsi 0 add -q --offline --pin=false f2) &&
+  HASH_BAZ=$(ipfsi 0 add -q --offline f3) &&
+  HASH_BAR_DIR=$(ipfsi 0 add -q --offline -w f2 | tail -1)
 '
 
 findprovs_empty '$HASH_FOO'
@@ -142,7 +121,7 @@ test_expect_success 'Disable reprovider ticking' '
 startup_cluster ${NUM_NODES}
 
 test_expect_success 'add test object' '
-  HASH_0=$(echo "foo" | ipfsi 0 add -q --local)
+  HASH_0=$(echo "foo" | ipfsi 0 add -q --offline)
 '
 
 findprovs_empty '$HASH_0'

@@ -3,19 +3,23 @@ package coremock
 import (
 	"context"
 
-	commands "github.com/ipfs/go-ipfs/commands"
-	core "github.com/ipfs/go-ipfs/core"
+	libp2p2 "github.com/ipfs/go-ipfs/core/node/libp2p"
+
+	"github.com/ipfs/go-ipfs/commands"
+	"github.com/ipfs/go-ipfs/core"
 	"github.com/ipfs/go-ipfs/repo"
 
-	datastore "github.com/ipfs/go-datastore"
+	"github.com/ipfs/go-datastore"
 	syncds "github.com/ipfs/go-datastore/sync"
 	config "github.com/ipfs/go-ipfs-config"
-	libp2p "github.com/libp2p/go-libp2p"
-	host "github.com/libp2p/go-libp2p-host"
-	peer "github.com/libp2p/go-libp2p-peer"
-	pstore "github.com/libp2p/go-libp2p-peerstore"
+
+	"github.com/libp2p/go-libp2p"
+	host "github.com/libp2p/go-libp2p-core/host"
+	peer "github.com/libp2p/go-libp2p-core/peer"
+	pstore "github.com/libp2p/go-libp2p-core/peerstore"
+	testutil "github.com/libp2p/go-libp2p-testing/net"
+
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
-	testutil "github.com/libp2p/go-testutil"
 )
 
 // NewMockNode constructs an IpfsNode for use in tests.
@@ -29,7 +33,7 @@ func NewMockNode() (*core.IpfsNode, error) {
 	})
 }
 
-func MockHostOption(mn mocknet.Mocknet) core.HostOption {
+func MockHostOption(mn mocknet.Mocknet) libp2p2.HostOption {
 	return func(ctx context.Context, id peer.ID, ps pstore.Peerstore, _ ...libp2p.Option) (host.Host, error) {
 		return mn.AddPeerWithPeerstore(id, ps)
 	}

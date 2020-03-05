@@ -49,7 +49,7 @@ func benchmarkAdd(amount int64) (*testing.BenchmarkResult, error) {
 				cmd.Env = env
 			}
 
-			cmd := exec.Command("ipfs", "init", "-b=1024")
+			cmd := exec.Command("ipfs", "init", "-b=2048")
 			setupCmd(cmd)
 			if err := cmd.Run(); err != nil {
 				b.Fatal(err)
@@ -62,7 +62,10 @@ func benchmarkAdd(amount int64) (*testing.BenchmarkResult, error) {
 			}
 			defer os.Remove(f.Name())
 
-			random.WritePseudoRandomBytes(amount, f, seed)
+			err = random.WritePseudoRandomBytes(amount, f, seed)
+			if err != nil {
+				b.Fatal(err)
+			}
 			if err := f.Close(); err != nil {
 				b.Fatal(err)
 			}
