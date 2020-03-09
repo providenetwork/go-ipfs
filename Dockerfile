@@ -66,6 +66,10 @@ COPY --from=0 /lib/*-linux-gnu*/libdl.so.2 /lib/
 COPY --from=0 /usr/lib/*-linux-gnu*/libssl.so* /usr/lib/
 COPY --from=0 /usr/lib/*-linux-gnu*/libcrypto.so* /usr/lib/
 
+# Copy over main.sh
+COPY --from=0 $SRC_DIR/main.sh /sbin/main.sh
+RUN chmod +x /sbin/main.sh
+
 # Swarm TCP; should be exposed to the public
 EXPOSE 4001
 # Daemon API; must not be exposed publicly but to client services under you control
@@ -93,10 +97,4 @@ VOLUME $IPFS_PATH
 # The default logging level
 ENV IPFS_LOGGING ""
 
-# This just makes sure that:
-# 1. There's an fs-repo, and initializes one if there isn't.
-# 2. The API and Gateway are accessible from outside the container.
-ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/start_ipfs"]
-
-# Execute the daemon subcommand by default
-CMD ["daemon", "--migrate=true"]
+ENTRYPOINT ["/sbin/tini", "--", "/sbin/main.sh"]
